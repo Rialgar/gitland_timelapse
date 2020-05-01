@@ -88,14 +88,52 @@ const fetchData = async () => {
     ]);
 
     const publicFiles = await fs.promises.readdir('./public/');
-    const filesToCopy = publicFiles.map( file => ({
+    const filesToCopyIntoWork = publicFiles.map( file => ({
         from: './public/' + file,
         to: pagesDir + file
     })).concat([{
         from: mapDataFile,
         to: pagesDir + 'mapData'
     }]);
-    await Promise.all(filesToCopy.map(({from, to}) => fs.promises.copyFile(from, to)));
+    await Promise.all(filesToCopyIntoWork.map(({from, to}) => fs.promises.copyFile(from, to)));
+
+    const thisRepo = simpleGit('.');
+    const status = await thisRepo.status();
+
+    if(['not_added', 'conflicted', 'created', 'deleted', 'modified'].some( key => 
+        status[key].length > 0
+    )) {
+        console.log('Not updating pages branch, since we have unstaged changes');
+    } else {
+        try {
+            await thisRepo.checkout('pages');
+
+            const pageFiles = await fs.promises.readdir(pagesDir);
+            const filesToCopyToRoot = pageFiles.map( file => ({
+                from: pagesDir + file,
+                to: file
+            }));
+            await Promise.all(filesToCopyToRoot.map(({from, to}) => fs.promises.copyFile(from, to)));
+            
+            const rootFiles = await fs.promises.readdir('.');
+            const filesToDelete = rootFiles.filter(file =>
+                file !== 'work' &&
+                file !== 'node_modules' &&
+                file !== '.gitignore' &&
+                file !== '.git' &&
+                !filesToCopyToRoot.some(copied => copied.to === file)
+            )
+            
+            await Promise.all(filesToCopyToRoot.map(({to}) => thisRepo.add(to)));
+            await Promise.all(filesToDelete.map(file => fs.promises.unlink(file)));
+            await thisRepo.commit("page built at " + new Date().toISOString());
+            //TODO: push */
+        } finally {
+            await thisRepo.checkout(status.current);
+            await thisRepo.checkout(["--", "."]);
+            await thisRepo.clean('f');
+        }
+    }
 };
 
 const checkFirstRun = async () => {
