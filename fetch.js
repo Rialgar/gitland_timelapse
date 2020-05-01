@@ -8,7 +8,7 @@ const mapDataFile = './work/mapData';
 const gitlandDir = './work/gitland/';
 const currentMapFile = gitlandDir + 'map';
 
-const pagesDir = './doc/';
+const pagesDir = './docs/';
 //https because that works without credentials
 const gitlandRepo = 'https://github.com/programical/gitland.git';
 
