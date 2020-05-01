@@ -8,23 +8,23 @@ const mapDataFile = './work/mapData';
 const gitlandDir = './work/gitland/';
 const currentMapFile = gitlandDir + 'map';
 
-const pagesDir = './work/pages/';
+const pagesDir = './doc/';
 //https because that works without credentials
 const gitlandRepo = 'https://github.com/programical/gitland.git';
 
 const fetchData = async () => {
     await checkFirstRun();
 
-    if(await processNewTurns()){
-        await updatePagesBranch();
+    if (await processNewTurns()) {
+        await updatePagesDir();
     }
 };
 
 const checkFirstRun = async () => {
     try {
         await fs.promises.mkdir('work');
-    } catch (e){
-        if(e.code === 'EEXIST'){
+    } catch (e) {
+        if (e.code === 'EEXIST') {
             return;
         } else {
             throw e;
@@ -33,8 +33,8 @@ const checkFirstRun = async () => {
 
     await Promise.all([
         simpleGit('work').clone(gitlandRepo),
-        fs.promises.writeFile(mapDataFile, '', {encoding: 'UTF-8'}),
-        fs.promises.writeFile(latestJSONFile, '{}', {encoding: 'UTF-8'}),
+        fs.promises.writeFile(mapDataFile, '', { encoding: 'UTF-8' }),
+        fs.promises.writeFile(latestJSONFile, '{}', { encoding: 'UTF-8' }),
         fs.promises.mkdir(pagesDir)
     ]);
 }
@@ -111,7 +111,7 @@ async function processNewTurns() {
 const fullRow = map => {
     let out = '';
     const symbols = map.split('\n').join(',').split(',').filter(Boolean);
-    for(let i = 0; i < symbols.length; i++){
+    for (let i = 0; i < symbols.length; i++) {
         out += toSingleChar(symbols[i]);
     }
     return out;
@@ -119,19 +119,19 @@ const fullRow = map => {
 
 const diff = (oldMap, newMap) => {
     let out = '';
-    if(oldMap.length != newMap.length){
+    if (oldMap.length != newMap.length) {
         throw new Error('Can not diff maps of different sizes');
     }
-    for(let i = 0; i < oldMap.length; i++){
-        if(oldMap[i] !== newMap[i]){
-            out += String.fromCharCode(i+20) + newMap[i];
+    for (let i = 0; i < oldMap.length; i++) {
+        if (oldMap[i] !== newMap[i]) {
+            out += String.fromCharCode(i + 20) + newMap[i];
         }
     }
     return out;
 }
 
 const toSingleChar = symbol => {
-    switch(symbol){
+    switch (symbol) {
         case 'ux':
             return 'x';
         case 'ur':
@@ -151,46 +151,28 @@ const toSingleChar = symbol => {
     }
 }
 
-async function updatePagesBranch() {
-    const publicFiles = await fs.promises.readdir('./public/');
-    const filesToCopyIntoWork = publicFiles.map(file => ({
-        from: './public/' + file,
-        to: pagesDir + file
-    })).concat([{
-        from: mapDataFile,
-        to: pagesDir + 'mapData'
-    }]);
-    await Promise.all(filesToCopyIntoWork.map(({ from, to }) => fs.promises.copyFile(from, to)));
+async function updatePagesDir() {
     const thisRepo = simpleGit('.');
     const status = await thisRepo.status();
     if (['not_added', 'conflicted', 'created', 'deleted', 'modified'].some(key => status[key].length > 0)) {
-        console.log('Not updating pages branch, since we have unstaged changes');
+        console.log('Not updating pages dir, since we have unstaged changes');
     }
     else {
-        try {
-            await thisRepo.checkout('pages');
-            const pageFiles = await fs.promises.readdir(pagesDir);
-            const filesToCopyToRoot = pageFiles.map(file => ({
-                from: pagesDir + file,
-                to: file
-            }));
-            await Promise.all(filesToCopyToRoot.map(({ from, to }) => fs.promises.copyFile(from, to)));
-            const rootFiles = await fs.promises.readdir('.');
-            const filesToDelete = rootFiles.filter(file => file !== 'work' &&
-                file !== 'node_modules' &&
-                file !== '.gitignore' &&
-                file !== '.git' &&
-                !filesToCopyToRoot.some(copied => copied.to === file));
-            await Promise.all(filesToCopyToRoot.map(({ to }) => thisRepo.add(to)));
-            await Promise.all(filesToDelete.map(file => fs.promises.unlink(file)));
-            await thisRepo.commit("page built at " + new Date().toISOString());
-            //TODO: push */
-        }
-        finally {
-            await thisRepo.checkout(status.current);
-            await thisRepo.checkout(["--", "."]);
-            await thisRepo.clean('f');
-        }
+        const publicFiles = await fs.promises.readdir('./public/');
+        const filesToCopy = publicFiles.map(file => ({
+            from: './public/' + file,
+            to: pagesDir + file
+        })).concat([{
+            from: mapDataFile,
+            to: pagesDir + 'mapData'
+        }]);
+        await Promise.all(filesToCopy.map(({ from, to }) => fs.promises.copyFile(from, to)));
+        const filesToDelete = (await (fs.promises.readdir(pagesDir))).map(file => pagesDir + file).filter(file => !filesToCopy.some(({ to }) => to === file));
+        await Promise.all(filesToDelete.map(file => fs.promises.unlink(file)));
+
+        await Promise.all(filesToCopy.map(({ to }) => to).concat(filesToDelete).map(file => thisRepo.add(file)));
+        await thisRepo.commit("page built at " + new Date().toISOString());
+        //TODO: push? */
     }
 }
 
