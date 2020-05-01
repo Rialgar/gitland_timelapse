@@ -1,0 +1,10 @@
+{
+  "name": "gitlandanim",
+  "version": "0.0.1",
+  "description": "animated gitland history",
+  "author": "Rialgar",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "simple-git": "^2.1.0"
+  }
+}
